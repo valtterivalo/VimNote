@@ -17,7 +17,7 @@ A lightweight, keyboard-driven notes application with Vim-like keybindings, buil
 
 ### Pre-built Binaries
 
-Download the latest release for your platform from the [Releases](https://github.com/yourusername/vimnote/releases) page.
+Download the latest release for your platform from the [Releases](https://github.com/valtterivalo/vimnote/releases) page.
 
 ### Building from Source
 
@@ -26,7 +26,7 @@ Requirements:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/vimnote.git
+git clone https://github.com/valtterivalo/vimnote.git
 cd vimnote
 
 # Build and run in release mode
