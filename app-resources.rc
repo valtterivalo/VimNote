@@ -1,0 +1,29 @@
+// Application icon
+1 ICON "assets/icon.ico"
+
+// Version information
+1 VERSIONINFO
+FILEVERSION     0,1,0,0
+PRODUCTVERSION  0,1,0,0
+FILEOS          0x40004
+FILETYPE        0x1
+{
+    BLOCK "StringFileInfo"
+    {
+        BLOCK "040904b0"
+        {
+            VALUE "CompanyName", "Valtteri Valo"
+            VALUE "FileDescription", "Minimalist Notes - A blazingly fast note-taking app"
+            VALUE "FileVersion", "0.1.0"
+            VALUE "InternalName", "minimalist_notes"
+            VALUE "LegalCopyright", "Copyright © 2025"
+            VALUE "OriginalFilename", "minimalist_notes.exe"
+            VALUE "ProductName", "Minimalist Notes"
+            VALUE "ProductVersion", "0.1.0"
+        }
+    }
+    BLOCK "VarFileInfo"
+    {
+        VALUE "Translation", 0x409, 1200
+    }
+}

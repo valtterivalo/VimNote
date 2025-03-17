@@ -1,0 +1,25 @@
+[package]
+name = "minimalist_notes"
+version = "0.1.0"
+edition = "2021"
+authors = ["Valtteri Valo"]
+description = "A minimalist note-taking app with vim keybinds"
+
+[dependencies]
+eframe = "0.23.0"
+egui = "0.23.0"
+chrono = "0.4.31"
+dirs = "5.0.1"
+env_logger = "0.10.1"
+log = "0.4.20"
+neovim-lib = "0.6.1"
+
+[dependencies.winapi]
+version = "0.3.9"
+features = ["winuser", "windef"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
