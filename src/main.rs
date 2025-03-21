@@ -50,6 +50,7 @@ struct SimpleEditor {
     cursor_position: usize,
     cursor_line: usize,
     cursor_column: usize,
+    desired_column: usize,  // Track desired column for vertical navigation
     vim_mode: VimMode,
     command_buffer: String,
     // New fields for key register system
@@ -63,6 +64,7 @@ impl SimpleEditor {
             cursor_position: 0,
             cursor_line: 0,
             cursor_column: 0,
+            desired_column: 0,  // Initialize desired column
             vim_mode: VimMode::Normal,
             command_buffer: String::new(),
             current_operation: VimOperation::None,
@@ -244,35 +246,40 @@ impl SimpleEditor {
                 (VimOperation::Delete, egui::Key::W) if self.register_buffer == "i" => {
                     // Handle 'diw' - delete inner word
                     if self.cursor_position < text.len() {
-                        // Find word boundaries
-                        let mut start_pos = self.cursor_position;
-                        let mut end_pos = self.cursor_position;
-                        
-                        // Check if cursor is on whitespace
-                        let is_on_whitespace = if self.cursor_position < text.len() {
-                            text[self.cursor_position..self.cursor_position+1].chars().next().unwrap_or(' ').is_whitespace()
+                        // Find word boundaries more robustly
+                        let is_current_char_whitespace = if self.cursor_position < text.len() {
+                            text[self.cursor_position..].chars().next().unwrap_or(' ').is_whitespace()
                         } else {
                             false
                         };
                         
-                        if is_on_whitespace {
-                            // Skip deleting if on whitespace for inner word
-                            self.current_operation = VimOperation::None;
-                            self.register_buffer.clear();
-                            return (true, None);
+                        let mut start_pos = self.cursor_position;
+                        let mut end_pos = self.cursor_position;
+                        
+                        if is_current_char_whitespace {
+                            // For whitespace, just delete that character
+                            end_pos = self.cursor_position + 1;
+                        } else {
+                            // Find start of current word (go backward)
+                            while start_pos > 0 {
+                                let prev_char = text[start_pos-1..start_pos].chars().next().unwrap_or(' ');
+                                if prev_char.is_whitespace() || !prev_char.is_alphanumeric() {
+                                    break;
+                                }
+                                start_pos -= 1;
+                            }
+                            
+                            // Find end of current word (go forward)
+                            while end_pos < text.len() {
+                                let current_char = text[end_pos..end_pos+1].chars().next().unwrap_or(' ');
+                                if current_char.is_whitespace() || !current_char.is_alphanumeric() {
+                                    break;
+                                }
+                                end_pos += 1;
+                            }
                         }
-
-                        // Find start of current word by going backwards
-                        while start_pos > 0 && !text[start_pos-1..start_pos].chars().next().unwrap_or(' ').is_whitespace() {
-                            start_pos -= 1;
-                        }
-
-                        // Find end of current word by going forwards
-                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
-                            end_pos += 1;
-                        }
-
-                        // Only delete if on a word
+                        
+                        // Only delete if there's something to delete
                         if end_pos > start_pos {
                             // Store in register buffer for paste operations
                             let content_to_save = text[start_pos..end_pos].to_string();
@@ -289,35 +296,40 @@ impl SimpleEditor {
                 (VimOperation::Change, egui::Key::W) if self.register_buffer == "i" => {
                     // Handle 'ciw' - change inner word
                     if self.cursor_position < text.len() {
-                        // Find word boundaries
-                        let mut start_pos = self.cursor_position;
-                        let mut end_pos = self.cursor_position;
-                        
-                        // Check if cursor is on whitespace
-                        let is_on_whitespace = if self.cursor_position < text.len() {
-                            text[self.cursor_position..self.cursor_position+1].chars().next().unwrap_or(' ').is_whitespace()
+                        // Find word boundaries more robustly
+                        let is_current_char_whitespace = if self.cursor_position < text.len() {
+                            text[self.cursor_position..].chars().next().unwrap_or(' ').is_whitespace()
                         } else {
                             false
                         };
                         
-                        if is_on_whitespace {
-                            // Skip changing if on whitespace for inner word
-                            self.current_operation = VimOperation::None;
-                            self.register_buffer.clear();
-                            return (true, None);
+                        let mut start_pos = self.cursor_position;
+                        let mut end_pos = self.cursor_position;
+                        
+                        if is_current_char_whitespace {
+                            // For whitespace, just change that character
+                            end_pos = self.cursor_position + 1;
+                        } else {
+                            // Find start of current word (go backward)
+                            while start_pos > 0 {
+                                let prev_char = text[start_pos-1..start_pos].chars().next().unwrap_or(' ');
+                                if prev_char.is_whitespace() || !prev_char.is_alphanumeric() {
+                                    break;
+                                }
+                                start_pos -= 1;
+                            }
+                            
+                            // Find end of current word (go forward)
+                            while end_pos < text.len() {
+                                let current_char = text[end_pos..end_pos+1].chars().next().unwrap_or(' ');
+                                if current_char.is_whitespace() || !current_char.is_alphanumeric() {
+                                    break;
+                                }
+                                end_pos += 1;
+                            }
                         }
-
-                        // Find start of current word by going backwards
-                        while start_pos > 0 && !text[start_pos-1..start_pos].chars().next().unwrap_or(' ').is_whitespace() {
-                            start_pos -= 1;
-                        }
-
-                        // Find end of current word by going forwards
-                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
-                            end_pos += 1;
-                        }
-
-                        // Only change if on a word
+                        
+                        // Only change if there's something to change
                         if end_pos > start_pos {
                             // Store in register buffer for paste operations
                             let content_to_save = text[start_pos..end_pos].to_string();
@@ -434,12 +446,14 @@ impl SimpleEditor {
                 if self.cursor_position > 0 {
                     self.cursor_position -= 1;
                     self.update_cursor_line_column(text);
+                    self.desired_column = self.cursor_column;
                 }
             },
             egui::Key::L | egui::Key::ArrowRight => {
                 if self.cursor_position < text.len() {
                     self.cursor_position += 1;
                     self.update_cursor_line_column(text);
+                    self.desired_column = self.cursor_column;
                 }
             },
             egui::Key::K | egui::Key::ArrowUp => {
@@ -580,6 +594,8 @@ impl SimpleEditor {
                 self.vim_mode = VimMode::Insert;
             },
             _ => {
+                // For other keys, update the desired column
+                self.desired_column = self.cursor_column;
                 handled = false;
             }
         }
@@ -625,12 +641,14 @@ impl SimpleEditor {
                 if self.cursor_position > 0 {
                     self.cursor_position -= 1;
                     self.update_cursor_line_column(text);
+                    self.desired_column = self.cursor_column;
                 }
             },
             egui::Key::ArrowRight => {
                 if self.cursor_position < text.len() {
                     self.cursor_position += 1;
                     self.update_cursor_line_column(text);
+                    self.desired_column = self.cursor_column;
                 }
             },
             egui::Key::ArrowUp => {
@@ -662,6 +680,8 @@ impl SimpleEditor {
                 self.update_cursor_line_column(text);
             },
             _ => {
+                // For other keys, update the desired column
+                self.desired_column = self.cursor_column;
                 handled = false;
             }
         }
@@ -748,8 +768,12 @@ impl SimpleEditor {
         } else {
             text // Safety check
         };
+        
         self.cursor_line = text_before_cursor.matches('\n').count();
         self.cursor_column = self.cursor_position - text_before_cursor.rfind('\n').map_or(0, |pos| pos + 1);
+        
+        // Update desired column when moving horizontally or on operations that aren't just vertical movement
+        // This code will be called elsewhere based on key events
     }
     
     fn find_position_on_next_line(&self, text: &str) -> Option<usize> {
@@ -757,13 +781,13 @@ impl SimpleEditor {
             return None;
         }
         
-        // Find current line start
-        let current_line_start = text[..self.cursor_position].rfind('\n')
+        // Find current line start (needed for context but not directly used)
+        let _current_line_start = text[..self.cursor_position].rfind('\n')
             .map(|pos| pos + 1)
             .unwrap_or(0);
         
-        // Find column offset within current line
-        let column_offset = self.cursor_position - current_line_start;
+        // Use desired column instead of current column
+        let desired_column = self.desired_column.max(self.cursor_column);
         
         // Find next line start
         if let Some(next_line_start) = text[self.cursor_position..].find('\n') {
@@ -778,9 +802,9 @@ impl SimpleEditor {
                 .map(|pos| next_line_start + pos)
                 .unwrap_or(text.len());
             
-            // Calculate position on next line with same column offset if possible
+            // Calculate position on next line with desired column if possible
             let next_line_length = next_line_end - next_line_start;
-            let new_offset = column_offset.min(next_line_length);
+            let new_offset = desired_column.min(next_line_length);
             
             Some(next_line_start + new_offset)
         } else {
@@ -803,17 +827,17 @@ impl SimpleEditor {
             return None;
         }
         
-        // Find column offset within current line
-        let column_offset = self.cursor_position - current_line_start;
+        // Use desired column instead of current column
+        let desired_column = self.desired_column.max(self.cursor_column);
         
         // Find previous line start
         let prev_line_start = text[..current_line_start - 1].rfind('\n')
             .map(|pos| pos + 1)
             .unwrap_or(0);
         
-        // Calculate position on previous line with same column offset if possible
+        // Calculate position on previous line with desired column if possible
         let prev_line_length = current_line_start - 1 - prev_line_start;
-        let new_offset = column_offset.min(prev_line_length);
+        let new_offset = desired_column.min(prev_line_length);
         
         Some(prev_line_start + new_offset)
     }
@@ -1347,15 +1371,26 @@ impl eframe::App for NotesApp {
                 let mut text_to_edit = self.current_note_content.clone();
 
                 // Add a custom text edit display
-                let text_layout = egui::text::LayoutJob::simple(
+                let mut text_layout = egui::text::LayoutJob::simple(
                     text_to_edit.clone(),
                     egui::FontId::monospace(14.0),
                     if self.dark_mode { egui::Color32::WHITE } else { egui::Color32::BLACK },
                     f32::INFINITY,
                 );
+                
+                // Ensure no underlining in the layout job
+                text_layout.wrap = egui::text::TextWrapping {
+                    max_width: f32::INFINITY,
+                    break_anywhere: false,
+                    overflow_character: None,
+                    max_rows: usize::MAX,
+                };
 
                 // Update the central panel's handling of the text editor and events
-                let editor_response = ui.add(egui::Label::new(text_layout).sense(egui::Sense::click()));
+                let editor_response = ui.add(
+                    egui::Label::new(text_layout)
+                        .sense(egui::Sense::click())
+                );
 
                 // Give the editor focus when in editor mode
                 if self.app_mode == AppMode::Editor {
