@@ -20,6 +20,15 @@ enum VimMode {
     Command,
 }
 
+// Define Vim operations
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum VimOperation {
+    None,
+    Delete,
+    Yank,
+    Change,
+}
+
 // Define the application state
 struct NotesApp {
     notes_dir: PathBuf,
@@ -43,6 +52,9 @@ struct SimpleEditor {
     cursor_column: usize,
     vim_mode: VimMode,
     command_buffer: String,
+    // New fields for key register system
+    current_operation: VimOperation,
+    register_buffer: String,
 }
 
 impl SimpleEditor {
@@ -53,6 +65,8 @@ impl SimpleEditor {
             cursor_column: 0,
             vim_mode: VimMode::Normal,
             command_buffer: String::new(),
+            current_operation: VimOperation::None,
+            register_buffer: String::new(),
         }
     }
     
@@ -68,7 +82,213 @@ impl SimpleEditor {
         let mut handled = true;
         let command_action = None;
         
+        // Check if we're in the middle of a operation
+        if self.current_operation != VimOperation::None {
+            match (self.current_operation, key) {
+                (VimOperation::Delete, egui::Key::W) => {
+                    // Implement delete word
+                    if self.cursor_position < text.len() {
+                        let start_pos = self.cursor_position;
+                        // Skip current word
+                        let mut end_pos = start_pos;
+                        
+                        // Skip non-whitespace
+                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+                        
+                        // Skip whitespace
+                        while end_pos < text.len() && text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+                        
+                        // Delete the word
+                        if end_pos > start_pos {
+                            // Store in register buffer before deleting
+                            self.register_buffer = text[start_pos..end_pos].to_string();
+                            text.replace_range(start_pos..end_pos, "");
+                            self.update_cursor_line_column(text);
+                        }
+                    }
+                    // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Delete, egui::Key::D) => {
+                    // Implement delete line (dd)
+                    // Find line start
+                    let line_start = text[..self.cursor_position].rfind('\n')
+                        .map(|pos| pos + 1)
+                        .unwrap_or(0);
+                    
+                    // Find line end
+                    let line_end = text[self.cursor_position..].find('\n')
+                        .map(|pos| self.cursor_position + pos + 1)
+                        .unwrap_or(text.len());
+                    
+                    // If this is the last line without a trailing newline, adjust
+                    let adjusted_line_end = if line_end > 0 && line_end < text.len() {
+                        line_end 
+                    } else if line_start > 0 {
+                        // For last line, also remove preceding newline
+                        line_start - 1
+                    } else {
+                        line_end
+                    };
+                    
+                    // Store in register buffer before deleting
+                    self.register_buffer = text[line_start..line_end].to_string();
+                    
+                    // Delete the line
+                    text.replace_range(line_start..adjusted_line_end, "");
+                    
+                    // Update cursor position
+                    self.cursor_position = line_start;
+                    if self.cursor_position > text.len() {
+                        self.cursor_position = text.len().saturating_sub(1);
+                    }
+                    self.update_cursor_line_column(text);
+                    
+                    // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Yank, egui::Key::W) => {
+                    // Implement yank word
+                    if self.cursor_position < text.len() {
+                        let start_pos = self.cursor_position;
+                        // Skip current word
+                        let mut end_pos = start_pos;
+                        
+                        // Skip non-whitespace
+                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+                        
+                        // Skip whitespace
+                        while end_pos < text.len() && text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+                        
+                        // Yank the word
+                        if end_pos > start_pos {
+                            self.register_buffer = text[start_pos..end_pos].to_string();
+                        }
+                    }
+                    // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Yank, egui::Key::Y) => {
+                    // Implement yank line (yy)
+                    // Find line start
+                    let line_start = text[..self.cursor_position].rfind('\n')
+                        .map(|pos| pos + 1)
+                        .unwrap_or(0);
+                    
+                    // Find line end
+                    let line_end = text[self.cursor_position..].find('\n')
+                        .map(|pos| self.cursor_position + pos + 1)
+                        .unwrap_or(text.len());
+                    
+                    // Yank the line
+                    self.register_buffer = text[line_start..line_end].to_string();
+                    
+                    // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Change, egui::Key::W) => {
+                    // Implement change word (similar to delete word but enters insert mode after)
+                    if self.cursor_position < text.len() {
+                        let start_pos = self.cursor_position;
+                        // Skip current word
+                        let mut end_pos = start_pos;
+                        
+                        // Skip non-whitespace
+                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+                        
+                        // Skip whitespace
+                        while end_pos < text.len() && text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+                        
+                        // Delete the word
+                        if end_pos > start_pos {
+                            // Store in register buffer before deleting
+                            self.register_buffer = text[start_pos..end_pos].to_string();
+                            text.replace_range(start_pos..end_pos, "");
+                            self.update_cursor_line_column(text);
+                        }
+                    }
+                    // Enter insert mode
+                    self.vim_mode = VimMode::Insert;
+                    // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Change, egui::Key::C) => {
+                    // Implement change line (similar to dd but enters insert mode after)
+                    // Find line start
+                    let line_start = text[..self.cursor_position].rfind('\n')
+                        .map(|pos| pos + 1)
+                        .unwrap_or(0);
+                    
+                    // Find line end
+                    let line_end = text[self.cursor_position..].find('\n')
+                        .map(|pos| self.cursor_position + pos)
+                        .unwrap_or(text.len());
+                    
+                    // Store in register buffer before deleting
+                    self.register_buffer = text[line_start..line_end].to_string();
+                    
+                    // Delete the line content but keep the line
+                    text.replace_range(line_start..line_end, "");
+                    
+                    // Update cursor position
+                    self.cursor_position = line_start;
+                    self.update_cursor_line_column(text);
+                    
+                    // Enter insert mode
+                    self.vim_mode = VimMode::Insert;
+                    // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                // Add more operation combinations here as needed
+                _ => {
+                    // If we don't recognize the combination, reset and fall through to regular handling
+                    self.current_operation = VimOperation::None;
+                }
+            }
+        }
+        
+        // Handle operation initiators
         match key {
+            egui::Key::D => {
+                self.current_operation = VimOperation::Delete;
+                return (true, None);
+            },
+            egui::Key::Y => {
+                self.current_operation = VimOperation::Yank;
+                return (true, None);
+            },
+            egui::Key::C => {
+                self.current_operation = VimOperation::Change;
+                return (true, None);
+            },
+            egui::Key::P => {
+                // Paste from register buffer
+                if !self.register_buffer.is_empty() {
+                    text.insert_str(self.cursor_position, &self.register_buffer);
+                    self.cursor_position += self.register_buffer.len();
+                    self.update_cursor_line_column(text);
+                }
+                return (true, None);
+            },
+            // Add more operation initiators here
             // Movement keys
             egui::Key::H | egui::Key::ArrowLeft => {
                 if self.cursor_position > 0 {
@@ -460,7 +680,18 @@ impl SimpleEditor {
     
     fn get_mode_display(&self) -> String {
         match self.vim_mode {
-            VimMode::Normal => "NORMAL".to_string(),
+            VimMode::Normal => {
+                if self.current_operation == VimOperation::None {
+                    "NORMAL".to_string()
+                } else {
+                    match self.current_operation {
+                        VimOperation::Delete => "NORMAL (d)".to_string(),
+                        VimOperation::Yank => "NORMAL (y)".to_string(),
+                        VimOperation::Change => "NORMAL (c)".to_string(),
+                        _ => "NORMAL".to_string(),
+                    }
+                }
+            },
             VimMode::Insert => "INSERT".to_string(),
             VimMode::Command => self.command_buffer.clone(),
         }
