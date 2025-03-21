@@ -1,115 +1,43 @@
 # VimNote
 
-A lightweight, keyboard-driven notes application with Vim-like keybindings, built with Rust and egui.
-
-![VimNote Screenshot](screenshot.png) <!-- Add a screenshot once available -->
-
-## Features
-
-- **Vim-inspired editing**: Navigate and edit text with familiar Vim keybindings
-- **Precise cursor positioning**: Accurately positions cursor with proper character alignment
-- **Vim operations**: Support for delete, yank, and change operations with registers
-- **Text objects**: Support for inner word operations (diw, ciw)
-- **Keyboard-driven interface**: Perform all actions without ever touching the mouse
-- **Minimalist design**: Focus on your content without distractions
-- **Dark/light mode**: Switch themes based on your preference
-- **Plain text and Markdown**: Store notes in widely compatible formats
-- **Auto-save**: Never lose your work
+A minimalist note-taking app with vim keybinds.
 
 ## Installation
 
-### Pre-built Binaries
+### macOS
 
-Download the latest release for your platform from the [Releases](https://github.com/valtterivalo/vimnote/releases) page.
+1. Download the latest release (`VimNote-0.1.0.dmg`) from the [GitHub Releases page](https://github.com/valtterivalo/vimnote/releases)
+2. Open the DMG file
+3. Drag VimNote to your Applications folder
+4. Open VimNote from your Applications folder
 
-### Building from Source
+### Building from source
 
 Requirements:
-- Rust and Cargo (install via [rustup](https://rustup.rs/))
+- Rust and Cargo (https://rustup.rs/)
 
 ```bash
 # Clone the repository
 git clone https://github.com/valtterivalo/vimnote.git
 cd vimnote
 
-# Build and run in release mode
+# Build and run in debug mode
+cargo run
+
+# Build for release
 cargo build --release
-./target/release/vimnote
 ```
 
-## Usage
+## Features
 
-### Application Modes
-
-VimNote has three main modes:
-
-1. **List Mode**: Browse and select notes
-2. **Editor Mode**: Edit note content with Vim-like controls
-3. **Rename Mode**: Rename existing notes
-
-### Key Bindings
-
-#### Global Shortcuts
-
-- `Alt+N`: Create a new note
-- `Alt+D`: Delete current note
-- `Alt+T`: Toggle dark/light mode
-- `Ctrl+S`: Save current note
-- `F5`: Refresh notes list
-- `Escape`: Return to previous mode
-
-#### List Mode
-
-- `j/k`: Navigate up/down through notes
-- `i/a`: Open selected note in insert mode
-- `r`: Rename selected note
-- Mouse click: Select and open note
-
-#### Editor Mode (Normal)
-
-- `h/j/k/l` or arrow keys: Basic movement (maintains desired column position when moving vertically)
-- `w`: Move forward one word
-- `b`: Move backward one word
-- `0`: Move to beginning of line
-- `4`: Move to end of line ($ equivalent)
-- `i`: Enter insert mode at cursor
-- `I`: Enter insert mode at line beginning
-- `a`: Enter insert mode after cursor
-- `A`: Enter insert mode at line end
-- `o`: Insert new line below and enter insert mode
-- `O`: Insert new line above and enter insert mode
-- `x`: Delete character at cursor
-- `d` + motion: Delete text (e.g. `dw` to delete word)
-- `c` + motion: Change text (e.g. `cw` to change word)
-- `y` + motion: Yank (copy) text
-- `diw`: Delete inner word
-- `ciw`: Change inner word
-- `dd`: Delete line
-- `cc`: Change line
-- `yy`: Yank (copy) line
-- `p`: Paste after cursor
-- `P`: Paste before cursor
-- `:` or `Shift+9`: Enter command mode
-
-#### Editor Mode (Insert)
-
-- Type normally to insert text
-- `Escape`: Return to normal mode
-- Arrow keys: Navigate while typing
-
-#### Editor Mode (Command)
-
-- `:w`: Save current note
-- `:q`: Quit to list mode
-- `:wq`: Save and quit to list mode
-
-## Development
-
-See the [specification.md](specification.md) file for detailed information about the application architecture and future development plans.
+- Vim key bindings for efficient note editing
+- Minimalist interface
+- Simple file-based notes storage in your Documents folder
+- Dark mode by default
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Copyright (c) 2023 Valtteri Valo. All rights reserved.
 
 ## Acknowledgements
 

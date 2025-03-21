@@ -23,3 +23,11 @@ opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[package.metadata.bundle]
+name = "VimNote"
+identifier = "com.valtterivalo.vimnote"
+version = "0.1.0"
+copyright = "Copyright (c) 2023 Valtteri Valo. All rights reserved."
+category = "Productivity"
+short_description = "A minimalist note-taking app with vim keybinds"
