@@ -245,39 +245,8 @@ impl SimpleEditor {
                 },
                 (VimOperation::Delete, egui::Key::W) if self.register_buffer == "i" => {
                     // Handle 'diw' - delete inner word
-                    if self.cursor_position < text.len() {
-                        // Find word boundaries more robustly
-                        let is_current_char_whitespace = if self.cursor_position < text.len() {
-                            text[self.cursor_position..].chars().next().unwrap_or(' ').is_whitespace()
-                        } else {
-                            false
-                        };
-                        
-                        let mut start_pos = self.cursor_position;
-                        let mut end_pos = self.cursor_position;
-                        
-                        if is_current_char_whitespace {
-                            // For whitespace, just delete that character
-                            end_pos = self.cursor_position + 1;
-                        } else {
-                            // Find start of current word (go backward)
-                            while start_pos > 0 {
-                                let prev_char = text[start_pos-1..start_pos].chars().next().unwrap_or(' ');
-                                if prev_char.is_whitespace() || !prev_char.is_alphanumeric() {
-                                    break;
-                                }
-                                start_pos -= 1;
-                            }
-                            
-                            // Find end of current word (go forward)
-                            while end_pos < text.len() {
-                                let current_char = text[end_pos..end_pos+1].chars().next().unwrap_or(' ');
-                                if current_char.is_whitespace() || !current_char.is_alphanumeric() {
-                                    break;
-                                }
-                                end_pos += 1;
-                            }
-                        }
+                    if !text.is_empty() && self.cursor_position < text.len() {
+                        let (start_pos, end_pos) = self.find_word_boundaries(text, self.cursor_position);
                         
                         // Only delete if there's something to delete
                         if end_pos > start_pos {
@@ -287,6 +256,7 @@ impl SimpleEditor {
                             self.register_buffer = content_to_save;
                             self.cursor_position = start_pos;
                             self.update_cursor_line_column(text);
+                            self.desired_column = self.cursor_column;
                         }
                     }
                     // Clear the operation
@@ -295,39 +265,8 @@ impl SimpleEditor {
                 },
                 (VimOperation::Change, egui::Key::W) if self.register_buffer == "i" => {
                     // Handle 'ciw' - change inner word
-                    if self.cursor_position < text.len() {
-                        // Find word boundaries more robustly
-                        let is_current_char_whitespace = if self.cursor_position < text.len() {
-                            text[self.cursor_position..].chars().next().unwrap_or(' ').is_whitespace()
-                        } else {
-                            false
-                        };
-                        
-                        let mut start_pos = self.cursor_position;
-                        let mut end_pos = self.cursor_position;
-                        
-                        if is_current_char_whitespace {
-                            // For whitespace, just change that character
-                            end_pos = self.cursor_position + 1;
-                        } else {
-                            // Find start of current word (go backward)
-                            while start_pos > 0 {
-                                let prev_char = text[start_pos-1..start_pos].chars().next().unwrap_or(' ');
-                                if prev_char.is_whitespace() || !prev_char.is_alphanumeric() {
-                                    break;
-                                }
-                                start_pos -= 1;
-                            }
-                            
-                            // Find end of current word (go forward)
-                            while end_pos < text.len() {
-                                let current_char = text[end_pos..end_pos+1].chars().next().unwrap_or(' ');
-                                if current_char.is_whitespace() || !current_char.is_alphanumeric() {
-                                    break;
-                                }
-                                end_pos += 1;
-                            }
-                        }
+                    if !text.is_empty() && self.cursor_position < text.len() {
+                        let (start_pos, end_pos) = self.find_word_boundaries(text, self.cursor_position);
                         
                         // Only change if there's something to change
                         if end_pos > start_pos {
@@ -337,6 +276,7 @@ impl SimpleEditor {
                             self.register_buffer = content_to_save;
                             self.cursor_position = start_pos;
                             self.update_cursor_line_column(text);
+                            self.desired_column = self.cursor_column;
                         }
                     }
                     // Enter insert mode
@@ -457,15 +397,27 @@ impl SimpleEditor {
                 }
             },
             egui::Key::K | egui::Key::ArrowUp => {
+                // Store current desired column
+                let current_desired = self.desired_column;
+                
                 if let Some(pos) = self.find_position_on_previous_line(text) {
                     self.cursor_position = pos;
                     self.update_cursor_line_column(text);
+                    
+                    // Restore desired column
+                    self.desired_column = current_desired;
                 }
             },
             egui::Key::J | egui::Key::ArrowDown => {
+                // Store current desired column
+                let current_desired = self.desired_column;
+                
                 if let Some(pos) = self.find_position_on_next_line(text) {
                     self.cursor_position = pos;
                     self.update_cursor_line_column(text);
+                    
+                    // Restore desired column
+                    self.desired_column = current_desired;
                 }
             },
             // Word movement
@@ -652,15 +604,27 @@ impl SimpleEditor {
                 }
             },
             egui::Key::ArrowUp => {
+                // Store current desired column
+                let current_desired = self.desired_column;
+                
                 if let Some(pos) = self.find_position_on_previous_line(text) {
                     self.cursor_position = pos;
                     self.update_cursor_line_column(text);
+                    
+                    // Restore desired column
+                    self.desired_column = current_desired;
                 }
             },
             egui::Key::ArrowDown => {
+                // Store current desired column
+                let current_desired = self.desired_column;
+                
                 if let Some(pos) = self.find_position_on_next_line(text) {
                     self.cursor_position = pos;
                     self.update_cursor_line_column(text);
+                    
+                    // Restore desired column
+                    self.desired_column = current_desired;
                 }
             },
             egui::Key::Home => {
@@ -781,17 +745,12 @@ impl SimpleEditor {
             return None;
         }
         
-        // Find current line start (needed for context but not directly used)
-        let _current_line_start = text[..self.cursor_position].rfind('\n')
-            .map(|pos| pos + 1)
-            .unwrap_or(0);
-        
-        // Use desired column instead of current column
-        let desired_column = self.desired_column.max(self.cursor_column);
+        // Save the current desired column for navigation purposes
+        let target_column = self.desired_column;
         
         // Find next line start
-        if let Some(next_line_start) = text[self.cursor_position..].find('\n') {
-            let next_line_start = self.cursor_position + next_line_start + 1;
+        if let Some(next_line_start_offset) = text[self.cursor_position..].find('\n') {
+            let next_line_start = self.cursor_position + next_line_start_offset + 1;
             
             if next_line_start >= text.len() {
                 return None;
@@ -802,11 +761,31 @@ impl SimpleEditor {
                 .map(|pos| next_line_start + pos)
                 .unwrap_or(text.len());
             
+            // Handle empty lines correctly
+            if next_line_start == next_line_end {
+                // If the next line is empty, just return its position but preserve the desired column
+                return Some(next_line_start);
+            }
+            
             // Calculate position on next line with desired column if possible
             let next_line_length = next_line_end - next_line_start;
-            let new_offset = desired_column.min(next_line_length);
+            let new_offset = target_column.min(next_line_length);
             
-            Some(next_line_start + new_offset)
+            // Ensure we're positioned correctly by checking UTF-8 char boundaries
+            let mut char_pos = next_line_start;
+            let mut col_count = 0;
+            
+            // Move through characters until we reach our target column
+            while char_pos < next_line_end && col_count < new_offset {
+                if let Some(c) = text[char_pos..].chars().next() {
+                    char_pos += c.len_utf8();
+                    col_count += 1;
+                } else {
+                    break;
+                }
+            }
+            
+            Some(char_pos)
         } else {
             None
         }
@@ -827,19 +806,39 @@ impl SimpleEditor {
             return None;
         }
         
-        // Use desired column instead of current column
-        let desired_column = self.desired_column.max(self.cursor_column);
+        // Save the current desired column for navigation purposes
+        let target_column = self.desired_column;
         
         // Find previous line start
         let prev_line_start = text[..current_line_start - 1].rfind('\n')
             .map(|pos| pos + 1)
             .unwrap_or(0);
         
+        // Handle empty previous line
+        if prev_line_start == current_line_start - 1 {
+            // If previous line is empty, go to its start but preserve the desired column
+            return Some(prev_line_start);
+        }
+        
         // Calculate position on previous line with desired column if possible
         let prev_line_length = current_line_start - 1 - prev_line_start;
-        let new_offset = desired_column.min(prev_line_length);
+        let new_offset = target_column.min(prev_line_length);
         
-        Some(prev_line_start + new_offset)
+        // Ensure we're positioned correctly by checking UTF-8 char boundaries
+        let mut char_pos = prev_line_start;
+        let mut col_count = 0;
+        
+        // Move through characters until we reach our target column
+        while char_pos < current_line_start - 1 && col_count < new_offset {
+            if let Some(c) = text[char_pos..].chars().next() {
+                char_pos += c.len_utf8();
+                col_count += 1;
+            } else {
+                break;
+            }
+        }
+        
+        Some(char_pos)
     }
     
     fn get_mode_display(&self) -> String {
@@ -859,6 +858,70 @@ impl SimpleEditor {
             VimMode::Insert => "INSERT".to_string(),
             VimMode::Command => self.command_buffer.clone(),
         }
+    }
+
+    // Add a helper method to get character at position, handling UTF-8 correctly
+    fn char_at(&self, text: &str, pos: usize) -> Option<char> {
+        if pos >= text.len() {
+            return None;
+        }
+        text[pos..].chars().next()
+    }
+    
+    // Add a helper method to check if a character is a word character
+    fn is_word_char(&self, c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
+    
+    // Add a method to find word boundaries
+    fn find_word_boundaries(&self, text: &str, pos: usize) -> (usize, usize) {
+        if text.is_empty() || pos >= text.len() {
+            return (0, 0);
+        }
+        
+        // Get character at position
+        let current_char = self.char_at(text, pos).unwrap_or(' ');
+        
+        // If on whitespace or symbol, just return this position
+        if !self.is_word_char(current_char) {
+            return (pos, pos + current_char.len_utf8());
+        }
+        
+        // Find start of word by going backward
+        let mut start = pos;
+        while start > 0 {
+            let prev_pos = start - 1;
+            // Move backward by UTF-8 character, not just bytes
+            let prev_char_pos = text[..prev_pos].char_indices()
+                .map(|(i, _)| i)
+                .rev()
+                .next()
+                .unwrap_or(0);
+                
+            if let Some(prev_char) = text[prev_char_pos..].chars().next() {
+                if !self.is_word_char(prev_char) {
+                    break;
+                }
+                start = prev_char_pos;
+            } else {
+                break;
+            }
+        }
+        
+        // Find end of word by going forward
+        let mut end = pos;
+        while end < text.len() {
+            if let Some(c) = text[end..].chars().next() {
+                if !self.is_word_char(c) {
+                    break;
+                }
+                end += c.len_utf8();
+            } else {
+                break;
+            }
+        }
+        
+        (start, end)
     }
 }
 
@@ -1370,103 +1433,126 @@ impl eframe::App for NotesApp {
                 // Create a custom text display without using TextEdit widget
                 let mut text_to_edit = self.current_note_content.clone();
 
-                // Add a custom text edit display
-                let mut text_layout = egui::text::LayoutJob::simple(
-                    text_to_edit.clone(),
-                    egui::FontId::monospace(14.0),
-                    if self.dark_mode { egui::Color32::WHITE } else { egui::Color32::BLACK },
-                    f32::INFINITY,
-                );
+                // Use a ScrollArea to contain the text
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        // Fill the background of the available area
+                        let bg_color = if self.dark_mode {
+                            egui::Color32::from_rgb(30, 30, 30) // Dark mode background
+                        } else {
+                            egui::Color32::from_rgb(245, 245, 245) // Light mode background
+                        };
+                        
+                        // Get the available area
+                        let text_area = ui.available_rect_before_wrap();
+                        
+                        // Fill the background
+                        ui.painter().rect_filled(
+                            text_area,
+                            0.0,
+                            bg_color
+                        );
+                        
+                        // Draw text directly instead of using Label to avoid unwanted styling
+                        let font_id = egui::FontId::monospace(14.0);
+                        let text_color = if self.dark_mode { 
+                            egui::Color32::WHITE 
+                        } else { 
+                            egui::Color32::BLACK 
+                        };
+                        
+                        // Allocate the entire area for interaction
+                        let editor_response = ui.allocate_rect(text_area, egui::Sense::click());
+                        
+                        // Create the text galley
+                        let text_galley = ui.ctx().fonts(|f| 
+                            f.layout_job(
+                                egui::text::LayoutJob::simple(
+                                    text_to_edit.clone(),
+                                    font_id.clone(),
+                                    text_color,
+                                    text_area.width()
+                                )
+                            )
+                        );
+                        
+                        // Draw the text
+                        ui.painter().galley(text_area.min, text_galley);
+                        
+                        // Draw the cursor
+                        if self.app_mode == AppMode::Editor {
+                            let line = self.editor.cursor_line;
+                            let col = self.editor.cursor_column;
+                            
+                            // Calculate cursor position visually
+                            let line_height = 16.0; // Approximate line height for monospace font
+                            let char_width = 8.0;   // Approximate character width for monospace font
+                            
+                            // Choose cursor color based on theme
+                            let cursor_color = if self.dark_mode {
+                                egui::Color32::WHITE // White cursor for dark mode
+                            } else {
+                                egui::Color32::BLACK // Black cursor for light mode
+                            };
+                            
+                            // Draw different cursors based on vim mode
+                            match self.editor.vim_mode {
+                                VimMode::Insert => {
+                                    // Vertical line cursor for insert mode
+                                    ui.painter().rect_filled(
+                                        egui::Rect::from_min_size(
+                                            egui::pos2(
+                                                text_area.min.x + col as f32 * char_width,
+                                                text_area.min.y + line as f32 * line_height,
+                                            ),
+                                            egui::vec2(2.0, line_height),
+                                        ),
+                                        0.0,
+                                        cursor_color,
+                                    );
+                                },
+                                VimMode::Command => {
+                                    // Command mode cursor (underline)
+                                    ui.painter().rect_filled(
+                                        egui::Rect::from_min_size(
+                                            egui::pos2(
+                                                text_area.min.x + col as f32 * char_width,
+                                                text_area.min.y + line as f32 * line_height + line_height - 2.0,
+                                            ),
+                                            egui::vec2(char_width, 2.0),
+                                        ),
+                                        0.0,
+                                        egui::Color32::from_rgb(255, 0, 0), // Red for command mode
+                                    );
+                                },
+                                VimMode::Normal => {
+                                    // Block cursor for normal mode
+                                    ui.painter().rect_filled(
+                                        egui::Rect::from_min_size(
+                                            egui::pos2(
+                                                text_area.min.x + col as f32 * char_width,
+                                                text_area.min.y + line as f32 * line_height,
+                                            ),
+                                            egui::vec2(char_width, line_height),
+                                        ),
+                                        0.0,
+                                        egui::Color32::from_rgba_premultiplied(
+                                            cursor_color.r(),
+                                            cursor_color.g(),
+                                            cursor_color.b(),
+                                            100
+                                        ), // Semi-transparent
+                                    );
+                                },
+                            }
+                        }
+                    });
                 
-                // Ensure no underlining in the layout job
-                text_layout.wrap = egui::text::TextWrapping {
-                    max_width: f32::INFINITY,
-                    break_anywhere: false,
-                    overflow_character: None,
-                    max_rows: usize::MAX,
-                };
-
-                // Update the central panel's handling of the text editor and events
-                let editor_response = ui.add(
-                    egui::Label::new(text_layout)
-                        .sense(egui::Sense::click())
-                );
-
-                // Give the editor focus when in editor mode
-                if self.app_mode == AppMode::Editor {
-                    ui.memory_mut(|mem| mem.request_focus(editor_response.id));
-                }
-
                 // Handle key events for editing only when in Editor mode
                 let mut editor_changed = false;
 
                 if self.app_mode == AppMode::Editor {
-                    // Draw the cursor
-                    let line = self.editor.cursor_line;
-                    let col = self.editor.cursor_column;
-                    
-                    // Calculate cursor position visually
-                    let line_height = 16.0; // Approximate line height for monospace font
-                    let char_width = 8.0;   // Approximate character width for monospace font
-                    
-                    // Choose cursor color based on theme
-                    let cursor_color = if self.dark_mode {
-                        egui::Color32::WHITE // White cursor for dark mode
-                    } else {
-                        egui::Color32::BLACK // Black cursor for light mode
-                    };
-                    
-                    // Draw different cursors based on vim mode
-                    match self.editor.vim_mode {
-                        VimMode::Insert => {
-                            // Vertical line cursor for insert mode
-                            ui.painter().rect_filled(
-                                egui::Rect::from_min_size(
-                                    egui::pos2(
-                                        editor_response.rect.min.x + col as f32 * char_width,
-                                        editor_response.rect.min.y + line as f32 * line_height,
-                                    ),
-                                    egui::vec2(2.0, line_height),
-                                ),
-                                0.0,
-                                cursor_color,
-                            );
-                        },
-                        VimMode::Command => {
-                            // Command mode cursor (underline)
-                            ui.painter().rect_filled(
-                                egui::Rect::from_min_size(
-                                    egui::pos2(
-                                        editor_response.rect.min.x + col as f32 * char_width,
-                                        editor_response.rect.min.y + line as f32 * line_height + line_height - 2.0,
-                                    ),
-                                    egui::vec2(char_width, 2.0),
-                                ),
-                                0.0,
-                                egui::Color32::from_rgb(255, 0, 0), // Red for command mode
-                            );
-                        },
-                        VimMode::Normal => {
-                            // Block cursor for normal mode
-                            ui.painter().rect_filled(
-                                egui::Rect::from_min_size(
-                                    egui::pos2(
-                                        editor_response.rect.min.x + col as f32 * char_width,
-                                        editor_response.rect.min.y + line as f32 * line_height,
-                                    ),
-                                    egui::vec2(char_width, line_height),
-                                ),
-                                0.0,
-                                egui::Color32::from_rgba_premultiplied(
-                                    cursor_color.r(),
-                                    cursor_color.g(),
-                                    cursor_color.b(),
-                                    100
-                                ), // Semi-transparent
-                            );
-                        },
-                    }
-                    
                     // Handle key events for editing
                     let mut editor_events = Vec::new();
                     
