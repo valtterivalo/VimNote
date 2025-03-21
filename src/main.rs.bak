@@ -377,7 +377,7 @@ impl SimpleEditor {
                         }
                     }
                     self.update_cursor_line_column(text);
-                }
+                },
             },
             // Add more operation initiators here
             // Movement keys

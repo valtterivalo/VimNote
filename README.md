@@ -7,6 +7,9 @@ A lightweight, keyboard-driven notes application with Vim-like keybindings, buil
 ## Features
 
 - **Vim-inspired editing**: Navigate and edit text with familiar Vim keybindings
+- **Precise cursor positioning**: Accurately positions cursor with proper character alignment
+- **Vim operations**: Support for delete, yank, and change operations with registers
+- **Text objects**: Support for inner word operations (diw, ciw)
 - **Keyboard-driven interface**: Perform all actions without ever touching the mouse
 - **Minimalist design**: Focus on your content without distractions
 - **Dark/light mode**: Switch themes based on your preference
@@ -64,7 +67,7 @@ VimNote has three main modes:
 
 #### Editor Mode (Normal)
 
-- `h/j/k/l` or arrow keys: Basic movement
+- `h/j/k/l` or arrow keys: Basic movement (maintains desired column position when moving vertically)
 - `w`: Move forward one word
 - `b`: Move backward one word
 - `0`: Move to beginning of line
@@ -76,6 +79,16 @@ VimNote has three main modes:
 - `o`: Insert new line below and enter insert mode
 - `O`: Insert new line above and enter insert mode
 - `x`: Delete character at cursor
+- `d` + motion: Delete text (e.g. `dw` to delete word)
+- `c` + motion: Change text (e.g. `cw` to change word)
+- `y` + motion: Yank (copy) text
+- `diw`: Delete inner word
+- `ciw`: Change inner word
+- `dd`: Delete line
+- `cc`: Change line
+- `yy`: Yank (copy) line
+- `p`: Paste after cursor
+- `P`: Paste before cursor
 - `:` or `Shift+9`: Enter command mode
 
 #### Editor Mode (Insert)
