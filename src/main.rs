@@ -85,7 +85,7 @@ impl SimpleEditor {
         // Check if we're in the middle of a operation
         if self.current_operation != VimOperation::None {
             match (self.current_operation, key) {
-                (VimOperation::Delete, egui::Key::W) => {
+                (VimOperation::Delete, egui::Key::W) if self.register_buffer != "i" => {
                     // Implement delete word
                     if self.cursor_position < text.len() {
                         let start_pos = self.cursor_position;
@@ -198,7 +198,7 @@ impl SimpleEditor {
                     self.current_operation = VimOperation::None;
                     return (true, None);
                 },
-                (VimOperation::Change, egui::Key::W) => {
+                (VimOperation::Change, egui::Key::W) if self.register_buffer != "i" => {
                     // Implement change word (similar to delete word but enters insert mode after)
                     if self.cursor_position < text.len() {
                         let start_pos = self.cursor_position;
@@ -226,6 +226,110 @@ impl SimpleEditor {
                     // Enter insert mode
                     self.vim_mode = VimMode::Insert;
                     // Reset the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Delete, egui::Key::I) => {
+                    // Add 'i' to register buffer to track we're building 'di' sequence
+                    self.register_buffer = "i".to_string();
+                    // Don't reset operation - we're waiting for the next key
+                    return (true, None);
+                },
+                (VimOperation::Change, egui::Key::I) => {
+                    // Add 'i' to register buffer to track we're building 'ci' sequence
+                    self.register_buffer = "i".to_string();
+                    // Don't reset operation - we're waiting for the next key
+                    return (true, None);
+                },
+                (VimOperation::Delete, egui::Key::W) if self.register_buffer == "i" => {
+                    // Handle 'diw' - delete inner word
+                    if self.cursor_position < text.len() {
+                        // Find word boundaries
+                        let mut start_pos = self.cursor_position;
+                        let mut end_pos = self.cursor_position;
+                        
+                        // Check if cursor is on whitespace
+                        let is_on_whitespace = if self.cursor_position < text.len() {
+                            text[self.cursor_position..self.cursor_position+1].chars().next().unwrap_or(' ').is_whitespace()
+                        } else {
+                            false
+                        };
+                        
+                        if is_on_whitespace {
+                            // Skip deleting if on whitespace for inner word
+                            self.current_operation = VimOperation::None;
+                            self.register_buffer.clear();
+                            return (true, None);
+                        }
+
+                        // Find start of current word by going backwards
+                        while start_pos > 0 && !text[start_pos-1..start_pos].chars().next().unwrap_or(' ').is_whitespace() {
+                            start_pos -= 1;
+                        }
+
+                        // Find end of current word by going forwards
+                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+
+                        // Only delete if on a word
+                        if end_pos > start_pos {
+                            // Store in register buffer for paste operations
+                            let content_to_save = text[start_pos..end_pos].to_string();
+                            text.replace_range(start_pos..end_pos, "");
+                            self.register_buffer = content_to_save;
+                            self.cursor_position = start_pos;
+                            self.update_cursor_line_column(text);
+                        }
+                    }
+                    // Clear the operation
+                    self.current_operation = VimOperation::None;
+                    return (true, None);
+                },
+                (VimOperation::Change, egui::Key::W) if self.register_buffer == "i" => {
+                    // Handle 'ciw' - change inner word
+                    if self.cursor_position < text.len() {
+                        // Find word boundaries
+                        let mut start_pos = self.cursor_position;
+                        let mut end_pos = self.cursor_position;
+                        
+                        // Check if cursor is on whitespace
+                        let is_on_whitespace = if self.cursor_position < text.len() {
+                            text[self.cursor_position..self.cursor_position+1].chars().next().unwrap_or(' ').is_whitespace()
+                        } else {
+                            false
+                        };
+                        
+                        if is_on_whitespace {
+                            // Skip changing if on whitespace for inner word
+                            self.current_operation = VimOperation::None;
+                            self.register_buffer.clear();
+                            return (true, None);
+                        }
+
+                        // Find start of current word by going backwards
+                        while start_pos > 0 && !text[start_pos-1..start_pos].chars().next().unwrap_or(' ').is_whitespace() {
+                            start_pos -= 1;
+                        }
+
+                        // Find end of current word by going forwards
+                        while end_pos < text.len() && !text[end_pos..end_pos+1].chars().next().unwrap_or(' ').is_whitespace() {
+                            end_pos += 1;
+                        }
+
+                        // Only change if on a word
+                        if end_pos > start_pos {
+                            // Store in register buffer for paste operations
+                            let content_to_save = text[start_pos..end_pos].to_string();
+                            text.replace_range(start_pos..end_pos, "");
+                            self.register_buffer = content_to_save;
+                            self.cursor_position = start_pos;
+                            self.update_cursor_line_column(text);
+                        }
+                    }
+                    // Enter insert mode
+                    self.vim_mode = VimMode::Insert;
+                    // Clear the operation
                     self.current_operation = VimOperation::None;
                     return (true, None);
                 },
@@ -282,8 +386,44 @@ impl SimpleEditor {
             egui::Key::P => {
                 // Paste from register buffer
                 if !self.register_buffer.is_empty() {
-                    text.insert_str(self.cursor_position, &self.register_buffer);
-                    self.cursor_position += self.register_buffer.len();
+                    if modifiers.shift {
+                        // P - Paste before/above current position
+                        if self.register_buffer.contains('\n') {
+                            // For multi-line content, find line start
+                            let line_start = text[..self.cursor_position].rfind('\n')
+                                .map(|pos| pos + 1)
+                                .unwrap_or(0);
+                            
+                            // Insert at line start
+                            text.insert_str(line_start, &self.register_buffer);
+                            self.cursor_position = line_start + self.register_buffer.len();
+                        } else {
+                            // For single-line content, insert at cursor
+                            text.insert_str(self.cursor_position, &self.register_buffer);
+                            self.cursor_position += self.register_buffer.len();
+                        }
+                    } else {
+                        // p - Paste after/below current position
+                        if self.register_buffer.contains('\n') {
+                            // For multi-line content, find line end
+                            let line_end = text[self.cursor_position..].find('\n')
+                                .map(|pos| self.cursor_position + pos + 1)
+                                .unwrap_or(text.len());
+                            
+                            // Insert at line end
+                            text.insert_str(line_end, &self.register_buffer);
+                            self.cursor_position = line_end + self.register_buffer.len();
+                        } else {
+                            // For single-line content, insert after cursor
+                            let insert_pos = if self.cursor_position < text.len() {
+                                self.cursor_position + 1
+                            } else {
+                                self.cursor_position
+                            };
+                            text.insert_str(insert_pos, &self.register_buffer);
+                            self.cursor_position = insert_pos + self.register_buffer.len();
+                        }
+                    }
                     self.update_cursor_line_column(text);
                 }
                 return (true, None);
